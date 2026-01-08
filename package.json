@@ -1,0 +1,31 @@
+{
+  "name": "railgun_demo",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xiaok/railgun_demo.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/xiaok/railgun_demo/issues"
+  },
+  "homepage": "https://github.com/xiaok/railgun_demo#readme",
+  "description": "",
+  "dependencies": {
+    "@railgun-community/shared-models": "^8.0.0",
+    "@railgun-community/wallet": "^10.8.1",
+    "classic-level": "^3.0.0",
+    "dotenv": "^17.2.3",
+    "ethers": "^6.13.1",
+    "level": "^10.0.0",
+    "leveldown": "^6.1.1",
+    "memdown": "^6.1.1"
+  }
+}
