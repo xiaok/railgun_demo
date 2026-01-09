@@ -10,7 +10,7 @@ updatePOI.js - update poi, standalone updatePOI interface that can run independe
 2. 对钱包做的任何修改（包括收到钱，包括 update poi）都需要同步余额（refreshBalances）避免报错  
 3. railgun 的 ENCRYPTION_KEY 类似于 btc 钱包的设计；即助记词 + 任意 ENCRYPTION_KEY 都会生成固定的 0zk 地址，ENCRYPTION_KEY 作为 walletdb 的 “密码” 存在。这里对于 ETH 开发者来说可能会产生误导，特此提及。所以，在 updatePOI 中，看似 generatePOIsForWallet(networkName, walletId) 只提供了 walletId 一个参数，实际上的需求是 需要 walletdb + ENCRYPTION_KEY，本质上还是需要助记词才能运行。  
 
-## 0zk 地址资金互转和 sheild 的 poi 不同点：
+## 0zk 地址资金互转和 shield 的 poi 不同点：
 
 1. 0zk 地址互转： 发送 tx -> 立即生成 poi 证明 -> to 方资金可用
-2. sheild 资金： 发送 tx -> 等待一个小时 -> 生成 poi 证明 -> to 方资金可用
+2. shield 资金： 发送 tx -> 等待一个小时 -> 生成 poi 证明 -> to 方资金可用
