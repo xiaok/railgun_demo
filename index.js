@@ -1,19 +1,21 @@
 import leveldown from "leveldown";
-import RailgunWallet from "@railgun-community/wallet";
-import { NetworkName, NETWORK_CONFIG } from "@railgun-community/shared-models";
+import { 
+  startRailgunEngine, 
+  createRailgunWallet, 
+  stopRailgunEngine, 
+  loadProvider, 
+  refreshBalances, 
+  setOnBalanceUpdateCallback,
+  setOnUTXOMerkletreeScanCallback,
+  setOnTXIDMerkletreeScanCallback,
+  getProver
+} from "@railgun-community/wallet";
+import { NetworkName, NETWORK_CONFIG, RailgunWalletBalanceBucket } from "@railgun-community/shared-models";
 import * as fs from "fs/promises";
 import * as path from "path";
 import dotenv from "dotenv";
 import { createHash } from "crypto";
-
-const {
-  startRailgunEngine,
-  createRailgunWallet,
-  stopRailgunEngine,
-  loadProvider,
-  refreshBalances,
-  setOnBalanceUpdateCallback
-} = RailgunWallet;
+import { groth16 } from "snarkjs";
 
 dotenv.config();
 
@@ -48,7 +50,9 @@ async function initializeRailgun() {
     const artifactStore = createArtifactStore("./artifacts");
     const poiNodeURLs = ["https://ppoi-agg.horsewithsixlegs.xyz"];
     
-    await startRailgunEngine("demowallet", db, false, artifactStore, false, false, poiNodeURLs, []);
+    await startRailgunEngine("demowallet", db, true, artifactStore, false, false, poiNodeURLs, []);
+    
+    getProver().setSnarkJSGroth16(groth16);
 
     const { chain } = NETWORK_CONFIG[networkName];
     await loadProvider({
@@ -56,6 +60,7 @@ async function initializeRailgun() {
         providers: [{ provider: rpcUrl, priority: 1, weight: 2 }]
     }, networkName);
 
+    console.log("Creating/Restoring wallet from mnemonic...");
     const creationBlockNumbers = { [networkName]: creationBlock };
     const railgunWalletInfo = await createRailgunWallet(encryptionKey, mnemonic, creationBlockNumbers);
 
@@ -65,31 +70,31 @@ async function initializeRailgun() {
     };
 }
 
-async function fetchBalances(walletInfo, chain) {
-    return new Promise((resolve, reject) => {
-        let balancesByBucket = {};
-        let completionTimer = null;
-
-        const finish = () => {
-            if (completionTimer) clearTimeout(completionTimer);
-            resolve(balancesByBucket);
-        };
-
-        setOnBalanceUpdateCallback((balancesEvent) => {
-            if (balancesEvent.chain.id !== chain.id) return;
-
-            const { erc20Amounts, balanceBucket } = balancesEvent;
-            const positiveBalances = erc20Amounts.filter(t => BigInt(t.amount) > 0n);
-
-            if (positiveBalances.length > 0) {
-                balancesByBucket[balanceBucket] = positiveBalances;
-                if (completionTimer) clearTimeout(completionTimer);
-                completionTimer = setTimeout(finish, 5000);
-            }
-        });
-
-        refreshBalances(chain, [walletInfo.id]).catch(reject);
+function setupScanCallbacks(chain) {
+    setOnUTXOMerkletreeScanCallback((event) => {
+        // console.log(`UTXO Scan: ${(event.progress * 100).toFixed(1)}%`);
     });
+    
+    setOnTXIDMerkletreeScanCallback((event) => {
+        // console.log(`TXID Scan: ${(event.progress * 100).toFixed(1)}%`);
+    });
+}
+
+async function fetchBalances(walletInfo, chain) {
+    const balances = {};
+    
+    setOnBalanceUpdateCallback((balancesEvent) => {
+        if (balancesEvent.chain.id !== chain.id) return;
+        if (balancesEvent.railgunWalletID !== walletInfo.id) return;
+        
+        balances[balancesEvent.balanceBucket] = balancesEvent.erc20Amounts;
+        console.log(`Balance update for ${balancesEvent.balanceBucket}: ${balancesEvent.erc20Amounts.length} tokens found`);
+    });
+
+    console.log("Triggering balance refresh...");
+    await refreshBalances(chain, [walletInfo.id]);
+    
+    return balances;
 }
 
 const main = async () => {
@@ -98,22 +103,36 @@ const main = async () => {
     
     console.log(`0zk Address: ${walletInfo.railgunAddress}`);
 
-    console.log("Fetching balances...may cost many times first time");
-
+    setupScanCallbacks(chain);
+    
+    console.log("Scanning balances (this may take time)...");
     const finalBalances = await fetchBalances(walletInfo, chain);
 
-    Object.keys(finalBalances).forEach(bucket => {
-        console.log(`\n[${bucket}]`);
-        finalBalances[bucket].forEach(t => {
-            console.log(`  ${t.tokenAddress}: ${t.amount.toString()} (wei)`);
-        });
+    console.log("\n--- Final Balances ---");
+    const buckets = [
+        RailgunWalletBalanceBucket.Spendable,
+        RailgunWalletBalanceBucket.ShieldPending,
+        RailgunWalletBalanceBucket.ShieldBlocked
+    ];
+
+    buckets.forEach(bucket => {
+        const amounts = finalBalances[bucket] || [];
+        if (amounts.length > 0) {
+            console.log(`[${bucket}]`);
+            amounts.forEach(t => {
+                if (BigInt(t.amount) > 0n) {
+                    console.log(`  Token: ${t.tokenAddress}`);
+                    console.log(`  Amount: ${t.amount.toString()} (wei)`);
+                }
+            });
+        }
     });
 
     await stopRailgunEngine();
     process.exit(0);
 
   } catch (error) {
-    console.error(error);
+    console.error("Error:", error);
     process.exit(1);
   }
 };

@@ -26,6 +26,8 @@
     "ethers": "^6.13.1",
     "level": "^10.0.0",
     "leveldown": "^6.1.1",
-    "memdown": "^6.1.1"
+    "memdown": "^6.1.1",
+    "snarkjs": "^0.7.5",
+    "turndown": "^7.2.2"
   }
 }
